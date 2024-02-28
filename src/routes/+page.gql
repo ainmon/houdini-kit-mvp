@@ -1,0 +1,5 @@
+query GetArticles {
+    allWpArticles(first: 10) {
+        slug
+    }
+}
