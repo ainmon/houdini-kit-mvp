@@ -1,5 +1,6 @@
 import type { Readable } from 'svelte/store';
 
+
 // ´QueryStore´ is imported from runtime folder to avoid a circular dependency issue.
 // See: https://github.com/HoudiniGraphql/houdini/issues/818#issuecomment-1382295422
 import { isBrowser, QueryStore } from '$houdini/plugins/houdini-svelte/runtime';
@@ -16,7 +17,8 @@ import {
 	type UnsubscribeFn
 } from 'datocms-listen';
 
-import { Preview, PREVIEW_MODE_COOKIE_NAME } from '$lib/preview';
+import { type Preview, PREVIEW_MODE_COOKIE_NAME } from '$lib/preview';
+import { Writable } from '$houdini/runtime/lib/store';
 
 // This type is meant to store information about
 // the usage of the Real-time Updates.
@@ -37,12 +39,13 @@ export class QueryStoreWithPreviewSupport<
 	_Data extends GraphQLObject,
 	_Input extends object,
 	_ExtraFields = { error: ChannelErrorData; connectionStatus: ConnectionStatus }
-> extends QueryStore<_Data, _Input, _ExtraFields> {
+> extends QueryStore<_Data, _Input> {
 	enablePreview = false;
 
 	realTimeUpdatesApi: RealTimeUpdatesApi = null;
 
 	fetchFunction: typeof window.fetch | null = null;
+
 
 	constructor({ artifact, storeName, variables }: StoreConfig<_Data, _Input, QueryArtifact>) {
 		super({
@@ -51,7 +54,8 @@ export class QueryStoreWithPreviewSupport<
 			variables
 		});
 
-		this.store.update((storeState) => ({
+
+		this.observer.update((storeState) => ({
 			...storeState,
 			connectionStatus: 'closed',
 			error: null
@@ -72,7 +76,7 @@ export class QueryStoreWithPreviewSupport<
 		}
 	}
 
-	async fetch(...args: Parameters<QueryStore<_Data, _Input, _ExtraFields>['fetch']>) {
+	async fetch(...args: Parameters<QueryStore<_Data, _Input>['fetch']>) {
 		// Here, the `fetch` function which is used at the first fetch is stored
 		// as an attribute of the instance. The goal is to pass it later as a fetcher when subscribing to
 		// the GraphQL subscription channel.
@@ -88,7 +92,7 @@ export class QueryStoreWithPreviewSupport<
 	// the new one will normally call the one in the parent class, unless some conditions are met.
 	// If that's the case, a request to subscribe to Real-time Updates API is triggered.
 	subscribe(
-		...args: Parameters<Readable<QueryResult<_Data, _Input, _ExtraFields>>['subscribe']>
+		...args: Parameters<Readable<QueryResult<_Data, _Input>>['subscribe']>
 	): () => void {
 		// If code is running in the browser, and preview mode is enabled...
 		if (isBrowser && this.enablePreview) {
@@ -117,7 +121,7 @@ export class QueryStoreWithPreviewSupport<
 
 	private subscribeToRealTimeUpdateAPI() {
 		if (!this.realTimeUpdatesApi) {
-			this.store.update((storeState) => ({
+			this.observer.update((storeState) => ({
 				...storeState,
 				connectionStatus: 'connecting'
 			}));
@@ -130,7 +134,7 @@ export class QueryStoreWithPreviewSupport<
 				if (preview.enabled) {
 					const unsubscribeFunction = await subscribeToQuery({
 						query: this.artifact.raw,
-						variables: this.lastVariables,
+						variables: this.variables,
 						// Here we use a different token,
 						// which is retrieved from the server and it's available
 						// only when the server recognize the content of preview cookie
@@ -144,7 +148,7 @@ export class QueryStoreWithPreviewSupport<
 							// a subscription: `status` is expected to be `connecting` at first,
 							// the becoming `connected` once the connection to the channel has been
 							// espablished. Finally, when connction is closed, `status`	becomes `closed`.
-							this.store.update((storeState) => ({
+							this.observer.update((storeState) => ({
 								...storeState,
 								connectionStatus: status
 							}));
@@ -152,7 +156,7 @@ export class QueryStoreWithPreviewSupport<
 						onUpdate: (update) => {
 							// This is the main callback that updates store data when new data
 							// are pushed on the channel from the GraphQL server.
-							this.store.update((storeState) => ({
+							this.observer.update((storeState) => ({
 								...storeState,
 								data: update.response.data,
 								error: null
@@ -161,7 +165,7 @@ export class QueryStoreWithPreviewSupport<
 						onChannelError: (error) => {
 							// In case of issues on the channel, we set data to `null`
 							// and make the error available for inspection.
-							this.store.update((storeState) => ({
+							this.observer.update((storeState) => ({
 								...storeState,
 								data: null,
 								error: error

@@ -52,7 +52,7 @@ const config = {
 			type: 'number'
 		},
 		JsonField: {
-			type: 'unkown'
+			type: 'unknown'
 		},
 		ItemId: {
 			type: 'string'
